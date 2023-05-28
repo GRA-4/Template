@@ -1,25 +1,17 @@
-﻿using Microsoft.Win32;
+﻿using Newtonsoft.Json.Linq;
 using OfficeOpenXml;
-using System;
 using System.Collections.Generic;
 using System.Data;
-using System.Globalization;
 using System.IO;
 using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
-using System.Windows.Data;
-using System.Windows.Documents;
-using System.Windows.Input;
-using System.Windows.Media;
-using System.Windows.Media.Imaging;
-using System.Windows.Shapes;
+using Xceed.Document.NET;
+using Xceed.Words.NET;
 
 namespace Template_4332
 {
-   
+
     public partial class _4332_Strelkova : Window
     {
 
@@ -71,11 +63,13 @@ namespace Template_4332
 
         private void ImportButton_Click(object sender, RoutedEventArgs e)
         {
+            WorkersDataGrid.ItemsSource = null;
             ReadExcelFile(filePath);
         }
 
         private void ExportButton_Click(object sender, RoutedEventArgs e)
         {
+
              using (var package = new ExcelPackage(filePath))
             {
 
@@ -139,6 +133,80 @@ namespace Template_4332
                     }
                 }
                     
+        }
+
+        private void ImportJSON_Button_Click(object sender, RoutedEventArgs e)
+        {
+            WorkersDataGrid.ItemsSource = null;
+            string jsonFilePath = "E:\\1Vazhnoe\\Ucheba\\ISRPO3_2\\4.json";
+            string jsonContent = File.ReadAllText(jsonFilePath);
+
+            var jsonArray = JArray.Parse(jsonContent);
+
+            var columns = WorkersDataGrid.Columns;
+
+            // Получаем свойства первого объекта массива
+            var firstObject = jsonArray.First();
+            var properties = firstObject.Children<JProperty>();
+
+            WorkersDataGrid.ItemsSource = jsonArray;
+        }
+
+
+        private void ExporWord_Button_Click(object sender, RoutedEventArgs e)
+        {
+            DocX document = DocX.Create("output.docx");
+
+            // Получение уникальных значений столбца "Position"
+            var positions = WorkersDataGrid.Items.OfType<JObject>()
+                                    .Select(row => row["Position"].ToString())
+                                    .Distinct()
+                                    .ToList();
+
+            foreach (var position in positions)
+            {
+                // Создание новой страницы
+                document.InsertSectionPageBreak();
+
+                // Добавление заголовка категории
+                document.InsertParagraph(position);
+
+                // Получение данных для текущей категории
+                var categoryData = WorkersDataGrid.Items.OfType<JObject>()
+                                         .Where(row => row["Position"].ToString() == position)
+                                         .ToList();
+
+                // Создание таблицы с данными
+                Table table = document.AddTable(categoryData.Count + 1, categoryData.First().Properties().Count());
+
+                // Заполнение заголовков столбцов
+                var headers = categoryData.First().Properties().Select(p => p.Name).ToList();
+                for (int i = 0; i < headers.Count; i++)
+                {
+                    table.Rows[0].Cells[i].Paragraphs.First().Append(headers[i]);
+                }
+
+                // Заполнение данными
+                for (int i = 0; i < categoryData.Count; i++)
+                {
+                    var row = categoryData[i];
+                    int j = 0;
+                    foreach (var property in row.Properties())
+                    {
+                        table.Rows[i + 1].Cells[j].Paragraphs.First().Append(property.Value.ToString());
+                        j++;
+                    }
+                }
+
+                // Добавление таблицы в документ
+                document.InsertTable(table);
+
+                // Вывод количества элементов
+                document.InsertParagraph($"Количество элементов: {categoryData.Count}");
+            }
+
+            // Сохранение документа
+            document.Save();
         }
     }
 }
